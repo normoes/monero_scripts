@@ -1,17 +1,10 @@
-import requests
-import re
-import os
-import logging
-import argparse
-from collections import defaultdict
-from datetime import datetime, timezone
-import sys
-
 """
 Goal:
   * Get monero hard fork dates from /src/cryptonote_core/blockchain.cpp.
 
 How to:
+  * for default values and how to use the tool
+    - python get_monero_hard_fork_info.py --help
   * current master:
     - python get_monero_hard_fork_info.py
     - python get_monero_hard_fork_info.py --branch master
@@ -33,83 +26,124 @@ How to:
         version 9 ['Oct 19 2018 UTC', '1686275', '1535889548']
         version 10 ['Mar 09 2019 UTC', '1788000', '1549792439']
         version 11 ['Mar 10 2019 UTC', '1788720', '1550225678']
+  * It is possible to select the Monero network (mainnet, testnet, stagenet)
+    - python get_monero_hard_fork_info.py --network stagenet
+  * It is possible to select a different Monero daemon
+    - python get_monero_hard_fork_info.py --daemon localhost
 """
+
+import requests
+import re
+import os
+import logging
+import argparse
+from collections import defaultdict
+from datetime import datetime, timezone
+import sys
 
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
 
 BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", None)
+MONERO_NETWORK = os.environ.get("MONERO_NETWORK", None)
+DAEMON_HOST = os.environ.get("DAEMON_HOST", None)
 
-parser = argparse.ArgumentParser(description='Get monero hard fork dates from /src/cryptonote_core/blockchain.cpp.')
+parser = argparse.ArgumentParser(description='Get monero hard fork dates from /src/cryptonote_core/blockchain.cpp.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-b', '--branch', nargs='?', default="master", help='Branch to check /src/cryptonote_core/blockchain.cpp. If not given as argument, set PROJECT_BRANCH_NAME.')
+parser.add_argument('-n', '--network', nargs='?', default=NETWORK_MODES[0], help='Monero network to check (mainnet, stagenet, testnet). If not given as argument, set MONERO_NETWORK.')
+parser.add_argument('-d', '--daemon', nargs='?', default="node.xmr.to", help='Monero dameon to use. If not given as argument, set DAEMON_HOST.')
 args = parser.parse_args()
 
 if not BRANCH_NAME:
     BRANCH_NAME = args.branch
 
-URL = f"https://raw.githubusercontent.com/monero-project/monero/{BRANCH_NAME}/src/cryptonote_core/blockchain.cpp"
-BEGINNING = "} mainnet_hard_forks\[\]"
-END = "};"
-VERSION = "  // (version \d+) (.+)"
-DATE = "(\d+)th of (\w+), (\d+)"
-INFO = "\d+, \d+, \d+, \d+"
+if not MONERO_NETWORK:
+    MONERO_NETWORK = args.network
+    if not MONERO_NETWORK in NETWORK_MODES:
+        log.error(f"This is no known monero network mode {MONERO_NETWORK}")
+        sys.exit(1) 
 
-def get_last_and_next_hardfork(url):
-    response = requests.get(url)
+DAEMON_PORTS = {
+    NETWORK_MODES[0]: 18081,
+    NETWORK_MODES[1]: 38081,
+    NETWORK_MODES[2]: 28081,
+}
+
+if not DAEMON_HOST:
+    DAEMON_HOST = args.daemon
+
+DAEMON_ADDRESS = "http://" + DAEMON_HOST + f":{DAEMON_PORTS[MONERO_NETWORK]}/json_rpc"
+log.info(DAEMON_ADDRESS)
+
+URL = f"https://raw.githubusercontent.com/monero-project/monero/{BRANCH_NAME}/src/cryptonote_core/blockchain.cpp"
+BEGINNING_MAINNET = "} mainnet_hard_forks\[\]"
+BEGINNING_TESTNET = "} testnet_hard_forks\[\]"
+BEGINNING_STAGENET = "} stagenet_hard_forks\[\]"
+END = "};"
+INFO = "{ (\d+), (\d+), (\d+), (\d+.* })"
+
+NETWORK_RE = {
+    NETWORK_MODES[0]: BEGINNING_MAINNET,
+    NETWORK_MODES[1]: BEGINNING_STAGENET,
+    NETWORK_MODES[2]: BEGINNING_TESTNET,
+}
+
+def get_last_and_next_hardfork():
+    response = requests.get(URL)
     log.debug(response.status_code)
     log.debug(response.text)
     if response.status_code != 200:
         log.error(f"received HTTP status code {response.status_code} with {response.text}")
-        sys.exit
+        sys.exit(1)
     code = response.text
-    start_line = re.compile(BEGINNING, re.IGNORECASE)
+    start_line = re.compile(NETWORK_RE[MONERO_NETWORK], re.IGNORECASE)
     end_line = re.compile(END, re.IGNORECASE)
-    version_line = re.compile(VERSION, re.IGNORECASE)
-    date_line = re.compile(DATE, re.IGNORECASE)
+    info_line = re.compile(INFO, re.IGNORECASE)
 
     interesting = defaultdict(list)
     interesting_range = False
     lines = code.split("\n")
 
     for i, line in enumerate(lines):
+        line = line.strip()
         if line:
             if start_line.match(line):
                 interesting_range = True
             if end_line.match(line) and interesting_range:
                 interesting_range = False
                 break
-  
-            if version_line.match(line) and interesting_range:
-                groups = list(version_line.finditer(line))
-                info = groups[0].group(2)
-                date_ = list(date_line.finditer(info))
-                
-                if date_:
-                    day = date_[0].group(1)
-                    month = date_[0].group(2)
-                    year = date_[0].group(3)
-                else:
-                    day = "18"
-                    month = "April"
-                    year = "2014"
-                # make sure it has the correct format
-                date_string = datetime.strptime(f"{month} {day} {year}", "%B %d %Y").strftime("%b %d %Y ") + str(timezone.utc)
+            if info_line.match(line) and interesting_range:
+                fork_info = list(info_line.finditer(line))
+                version = fork_info[0].group(1)
+                block = fork_info[0].group(2)
+                difficulty = fork_info[0].group(4).translate({ord(" "): None, ord("}"): None})
 
-                interesting[groups[0].group(1)].append(date_string)
-                fork_info = lines[i+1]
-                fork_info = fork_info.translate({ord('{'):None, ord(" "):None, ord("}"): None})
-                fork_infos = fork_info[:-1].split(",")
-                block = fork_infos[1]
-                difficulty = fork_infos[-1]
-                interesting[groups[0].group(1)].append(block)
-                interesting[groups[0].group(1)].append(difficulty)
+                data = {"jsonrpc":"2.0","id":"0","method":"get_block_header_by_height","params":{"height":block}}
+                headers = {"Content-Type": "application/json"}
+                response = requests.post(DAEMON_ADDRESS, headers=headers, json=data)
+                log.debug(response.text)
+                if response.status_code != 200:
+                    log.warning(f"received HTTP status code {response.status_code} with {response.text}")
+                response = response.json()
+                result = response.get("result", None)
+                if result:
+                    timestamp = result["block_header"]["timestamp"]
+                    date = datetime.fromtimestamp(float(timestamp)).strftime("%b %d %Y ") + str(timezone.utc)
+                else:
+                    date = "---"
+                # add to list
+                interesting[f"Version {version}"].append(date)
+                interesting[f"Version {version}"].append(block)
+                interesting[f"Version {version}"].append(difficulty)
+                 
     return interesting
 
 
 if __name__ == "__main__":
-    stuff = get_last_and_next_hardfork(url=URL)
+    stuff = get_last_and_next_hardfork()
     for k, v in stuff.items():
         print(k, v)
