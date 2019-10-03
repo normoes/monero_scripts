@@ -32,7 +32,6 @@ How to:
     - python get_monero_hard_fork_info.py --daemon localhost
 """
 
-import requests
 import re
 import os
 import logging
@@ -40,11 +39,11 @@ import argparse
 from collections import defaultdict
 from datetime import datetime, timezone
 import sys
+import requests
 
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
 
 NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
 
@@ -52,11 +51,24 @@ BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", None)
 MONERO_NETWORK = os.environ.get("MONERO_NETWORK", None)
 DAEMON_HOST = os.environ.get("DAEMON_HOST", None)
 
+TIMEOUT = 10
+
 parser = argparse.ArgumentParser(description='Get monero hard fork dates from /src/cryptonote_core/blockchain.cpp.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-b', '--branch', nargs='?', default="master", help='Branch to check /src/cryptonote_core/blockchain.cpp. If not given as argument, set PROJECT_BRANCH_NAME.')
 parser.add_argument('-n', '--network', nargs='?', default=NETWORK_MODES[0], help='Monero network to check (mainnet, stagenet, testnet). If not given as argument, set MONERO_NETWORK.')
 parser.add_argument('-d', '--daemon', nargs='?', default="node.xmr.to", help='Monero dameon to use. If not given as argument, set DAEMON_HOST.')
+parser.add_argument(                                                                                                              
+   "--debug", action='store_true',  help="Show debug info."                    
+ )        
+
+
 args = parser.parse_args()
+
+DEBUG = args.debug
+if DEBUG:
+    log.setLevel(logging.DEBUG)
+else:
+    log.setLevel(logging.INFO)
 
 if not BRANCH_NAME:
     BRANCH_NAME = args.branch
@@ -79,10 +91,10 @@ if not DAEMON_HOST:
 DAEMON_ADDRESS = "http://" + DAEMON_HOST + f":{DAEMON_PORTS[MONERO_NETWORK]}/json_rpc"
 log.info(DAEMON_ADDRESS)
 
-URL = f"https://raw.githubusercontent.com/monero-project/monero/{BRANCH_NAME}/src/cryptonote_core/blockchain.cpp"
-BEGINNING_MAINNET = "} mainnet_hard_forks\[\]"
-BEGINNING_TESTNET = "} testnet_hard_forks\[\]"
-BEGINNING_STAGENET = "} stagenet_hard_forks\[\]"
+URL = f"https://raw.githubusercontent.com/monero-project/monero/{BRANCH_NAME}/src/hardforks/hardforks.cpp"
+BEGINNING_MAINNET = "const hardfork_t mainnet_hard_forks\[\]"
+BEGINNING_TESTNET = "const hardfork_t testnet_hard_forks\[\]"
+BEGINNING_STAGENET = "const hardfork_t stagenet_hard_forks\[\]"
 END = "};"
 INFO = "{ (\d+), (\d+), (\d+), (\d+.* })"
 
@@ -92,12 +104,16 @@ NETWORK_RE = {
     NETWORK_MODES[2]: BEGINNING_TESTNET,
 }
 
+
 def get_last_and_next_hardfork():
-    response = requests.get(URL)
+    response = requests.get(URL, timeout=TIMEOUT)
+
     log.debug(response.status_code)
     log.debug(response.text)
     if response.status_code != 200:
-        log.error(f"received HTTP status code {response.status_code} with {response.text}")
+        log.error(
+            f"received HTTP status code {response.status_code} with {response.text}"
+        )
         sys.exit(1)
     code = response.text
     start_line = re.compile(NETWORK_RE[MONERO_NETWORK], re.IGNORECASE)
@@ -120,28 +136,40 @@ def get_last_and_next_hardfork():
                 fork_info = list(info_line.finditer(line))
                 version = fork_info[0].group(1)
                 block = fork_info[0].group(2)
-                difficulty = fork_info[0].group(4).translate({ord(" "): None, ord("}"): None})
+                difficulty = (
+                    fork_info[0].group(4).translate({ord(" "): None, ord("}"): None})
+                )
 
-                data = {"jsonrpc":"2.0","id":"0","method":"get_block_header_by_height","params":{"height":block}}
+                data = {
+                    "jsonrpc": "2.0",
+                    "id": "0",
+                    "method": "get_block_header_by_height",
+                    "params": {"height": block},
+                }
                 headers = {"Content-Type": "application/json"}
-                response = requests.post(DAEMON_ADDRESS, headers=headers, json=data)
+                response = requests.post(
+                    DAEMON_ADDRESS, headers=headers, json=data, timeout=TIMEOUT
+                )
                 log.debug(response.text)
                 if response.status_code != 200:
-                    log.warning(f"received HTTP status code {response.status_code} with {response.text}")
+                    log.warning(
+                        f"received HTTP status code {response.status_code} with {response.text}"
+                    )
                 response = response.json()
                 result = response.get("result", None)
                 if result:
                     timestamp = result["block_header"]["timestamp"]
-                    date = datetime.fromtimestamp(float(timestamp)).strftime("%b %d %Y ") + str(timezone.utc)
+                    date = datetime.fromtimestamp(float(timestamp)).strftime(
+                        "%b %d %Y "
+                    ) + str(timezone.utc)
                 else:
                     date = "---"
                 # add to list
                 interesting[f"Version {version}"].append(date)
                 interesting[f"Version {version}"].append(block)
                 interesting[f"Version {version}"].append(difficulty)
-                 
-    return interesting
 
+    return interesting
 
 if __name__ == "__main__":
     stuff = get_last_and_next_hardfork()
