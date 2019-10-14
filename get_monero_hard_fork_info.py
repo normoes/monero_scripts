@@ -1,6 +1,6 @@
 """
 Goal:
-  * Get monero hard fork dates from /src/cryptonote_core/blockchain.cpp.
+  * Get monero hard fork dates from /src/hardforks/hardforks.cpp.
 
 How to:
   * for default values and how to use the tool
@@ -16,7 +16,7 @@ How to:
         version 3 ['Sep 24 2016 UTC', '1141317', '1458558528']
         version 4 ['Jan 05 2017 UTC', '1220516', '1483574400']
         version 5 ['Apr 15 2017 UTC', '1288616', '1489520158']
-        version 6 ['Sep 16 2017 UTC', '1400000', '1503046577'] 
+        version 6 ['Sep 16 2017 UTC', '1400000', '1503046577']
   * python get_monero_hard_fork_info.py --branch release-v0.12
         ...
         version 7 ['Apr 06 2018 UTC', '1546000', '1521303150']
@@ -39,7 +39,13 @@ import argparse
 from collections import defaultdict
 from datetime import datetime, timezone
 import sys
+
 import requests
+from requests.exceptions import (
+    ConnectionError as RequestsConnectionError,
+    ReadTimeout,
+    Timeout,
+)
 
 
 logging.basicConfig()
@@ -106,23 +112,27 @@ NETWORK_RE = {
 
 
 def get_last_and_next_hardfork():
-    response = requests.get(URL, timeout=TIMEOUT)
-
-    log.debug(response.status_code)
-    log.debug(response.text)
-    if response.status_code != 200:
-        log.error(
-            f"received HTTP status code {response.status_code} with {response.text}"
-        )
-        sys.exit(1)
-    code = response.text
-    start_line = re.compile(NETWORK_RE[MONERO_NETWORK], re.IGNORECASE)
-    end_line = re.compile(END, re.IGNORECASE)
-    info_line = re.compile(INFO, re.IGNORECASE)
-
+    lines = list()
     interesting = defaultdict(list)
-    interesting_range = False
-    lines = code.split("\n")
+    try:
+        response = requests.get(URL, timeout=TIMEOUT)
+
+        log.debug(response.status_code)
+        log.debug(response.text)
+        if response.status_code != 200:
+            log.error(
+                f"received HTTP status code {response.status_code} with {response.text}"
+            )
+            sys.exit(1)
+        code = response.text
+        start_line = re.compile(NETWORK_RE[MONERO_NETWORK], re.IGNORECASE)
+        end_line = re.compile(END, re.IGNORECASE)
+        info_line = re.compile(INFO, re.IGNORECASE)
+
+        interesting_range = False
+        lines = code.split("\n")
+    except (RequestsConnectionError, ReadTimeout, Timeout) as e:
+        logger.error(f"Cannot get information from {host}, because: {str(e)}")
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -147,16 +157,22 @@ def get_last_and_next_hardfork():
                     "params": {"height": block},
                 }
                 headers = {"Content-Type": "application/json"}
-                response = requests.post(
-                    DAEMON_ADDRESS, headers=headers, json=data, timeout=TIMEOUT
-                )
-                log.debug(response.text)
-                if response.status_code != 200:
-                    log.warning(
-                        f"received HTTP status code {response.status_code} with {response.text}"
+                result = None
+                try:
+                    response = requests.post(
+                        DAEMON_ADDRESS, headers=headers, json=data, timeout=TIMEOUT
                     )
-                response = response.json()
-                result = response.get("result", None)
+                    log.debug(response.text)
+                    if response.status_code != 200:
+                        log.warning(
+                            f"received HTTP status code {response.status_code} with {response.text}"
+                        )
+                    response = response.json()
+                    result = response.get("result", None)
+                except (RequestsConnectionError, ReadTimeout, Timeout) as e:
+                    logger.error(
+                        f"Cannot get info from {DAEMON_ADDRESS}, because: {str(e)}"
+                    )
                 if result:
                     timestamp = result["block_header"]["timestamp"]
                     date = datetime.fromtimestamp(float(timestamp)).strftime(
