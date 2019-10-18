@@ -50,6 +50,7 @@ from requests.exceptions import (
 
 logging.basicConfig()
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
 
@@ -57,33 +58,11 @@ BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", None)
 MONERO_NETWORK = os.environ.get("MONERO_NETWORK", None)
 DAEMON_HOST = os.environ.get("DAEMON_HOST", None)
 
+if MONERO_NETWORK and not MONERO_NETWORK in NETWORK_MODES:
+    log.error(f"This is no known monero network mode {MONERO_NETWORK}")
+    sys.exit(1)
+
 TIMEOUT = 10
-
-parser = argparse.ArgumentParser(description='Get monero hard fork dates from /src/cryptonote_core/blockchain.cpp.', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-b', '--branch', nargs='?', default="master", help='Branch to check /src/cryptonote_core/blockchain.cpp. If not given as argument, set PROJECT_BRANCH_NAME.')
-parser.add_argument('-n', '--network', nargs='?', default=NETWORK_MODES[0], help='Monero network to check (mainnet, stagenet, testnet). If not given as argument, set MONERO_NETWORK.')
-parser.add_argument('-d', '--daemon', nargs='?', default="node.xmr.to", help='Monero dameon to use. If not given as argument, set DAEMON_HOST.')
-parser.add_argument(                                                                                                              
-   "--debug", action='store_true',  help="Show debug info."                    
- )        
-
-
-args = parser.parse_args()
-
-DEBUG = args.debug
-if DEBUG:
-    log.setLevel(logging.DEBUG)
-else:
-    log.setLevel(logging.INFO)
-
-if not BRANCH_NAME:
-    BRANCH_NAME = args.branch
-
-if not MONERO_NETWORK:
-    MONERO_NETWORK = args.network
-    if not MONERO_NETWORK in NETWORK_MODES:
-        log.error(f"This is no known monero network mode {MONERO_NETWORK}")
-        sys.exit(1) 
 
 DAEMON_PORTS = {
     NETWORK_MODES[0]: 18081,
@@ -91,13 +70,17 @@ DAEMON_PORTS = {
     NETWORK_MODES[2]: 28081,
 }
 
-if not DAEMON_HOST:
-    DAEMON_HOST = args.daemon
+URL_DEFAULT = "https://raw.githubusercontent.com/monero-project/monero/{branch_name}/src/hardforks/hardforks.cpp"
+URL = None
+if BRANCH_NAME:
+    URL = URL_DEFAULT.format(branch_name=BRANCH_NAME)
+DAEMON_ADDRESS_DEFAULT = "http://{daemon_host}:{daemon_port}/json_rpc"
+DAEMON_ADDRESS = None
+if DAEMON_HOST and MONERO_NETWORK:
+    DAEMON_ADDRESS = DAEMON_ADDRESS_DEFAULT.format(
+        daemon_host=DAEMON_HOST, daemon_port=DAEMON_PORTS[MONERO_NETWORK]
+    )
 
-DAEMON_ADDRESS = "http://" + DAEMON_HOST + f":{DAEMON_PORTS[MONERO_NETWORK]}/json_rpc"
-log.info(DAEMON_ADDRESS)
-
-URL = f"https://raw.githubusercontent.com/monero-project/monero/{BRANCH_NAME}/src/hardforks/hardforks.cpp"
 BEGINNING_MAINNET = "const hardfork_t mainnet_hard_forks\[\]"
 BEGINNING_TESTNET = "const hardfork_t testnet_hard_forks\[\]"
 BEGINNING_STAGENET = "const hardfork_t stagenet_hard_forks\[\]"
@@ -111,28 +94,37 @@ NETWORK_RE = {
 }
 
 
-def get_last_and_next_hardfork():
+def get_last_and_next_hardfork(
+    url=URL,
+    daemon_address=DAEMON_ADDRESS,
+    monero_network=MONERO_NETWORK,
+    timeout=TIMEOUT,
+):
+    if not monero_network in NETWORK_MODES:
+        log.error(f"This is no known monero network mode {monero_network}")
+        sys.exit(1)
+
     lines = list()
     interesting = defaultdict(list)
     try:
-        response = requests.get(URL, timeout=TIMEOUT)
+        response = requests.get(url, timeout=timeout)
 
         log.debug(response.status_code)
         log.debug(response.text)
         if response.status_code != 200:
             log.error(
-                f"received HTTP status code {response.status_code} with {response.text}"
+                f"Received HTTP status code '{response.status_code}' for '{url}' with '{response.text}'."
             )
             sys.exit(1)
         code = response.text
-        start_line = re.compile(NETWORK_RE[MONERO_NETWORK], re.IGNORECASE)
+        start_line = re.compile(NETWORK_RE[monero_network], re.IGNORECASE)
         end_line = re.compile(END, re.IGNORECASE)
         info_line = re.compile(INFO, re.IGNORECASE)
 
         interesting_range = False
         lines = code.split("\n")
     except (RequestsConnectionError, ReadTimeout, Timeout) as e:
-        logger.error(f"Cannot get information from {host}, because: {str(e)}")
+        log.error(f"Cannot get information from {host}, because: {str(e)}")
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -160,7 +152,7 @@ def get_last_and_next_hardfork():
                 result = None
                 try:
                     response = requests.post(
-                        DAEMON_ADDRESS, headers=headers, json=data, timeout=TIMEOUT
+                        daemon_address, headers=headers, json=data, timeout=timeout
                     )
                     log.debug(response.text)
                     if response.status_code != 200:
@@ -170,8 +162,8 @@ def get_last_and_next_hardfork():
                     response = response.json()
                     result = response.get("result", None)
                 except (RequestsConnectionError, ReadTimeout, Timeout) as e:
-                    logger.error(
-                        f"Cannot get info from {DAEMON_ADDRESS}, because: {str(e)}"
+                    log.error(
+                        f"Cannot get info from {daemon_address}, because: {str(e)}"
                     )
                 if result:
                     timestamp = result["block_header"]["timestamp"]
@@ -187,7 +179,75 @@ def get_last_and_next_hardfork():
 
     return interesting
 
-if __name__ == "__main__":
-    stuff = get_last_and_next_hardfork()
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Get monero hard fork dates from /src/hardforks/hardforks.cpp.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "-b",
+        "--branch",
+        nargs="?",
+        default="master",
+        help="Branch to check /src/hardforks/hardforks.cpp. If not given as argument, set PROJECT_BRANCH_NAME.",
+    )
+    parser.add_argument(
+        "-n",
+        "--network",
+        nargs="?",
+        default=NETWORK_MODES[0],
+        help="Monero network to check (mainnet, stagenet, testnet). If not given as argument, set MONERO_NETWORK.",
+    )
+    parser.add_argument(
+        "-d",
+        "--daemon",
+        nargs="?",
+        default="node.xmr.to",
+        help="Monero dameon to use. If not given as argument, set DAEMON_HOST.",
+    )
+    parser.add_argument("--debug", action="store_true", help="Show debug info.")
+
+    args = parser.parse_args()
+
+    if args.debug:
+        log.setLevel(logging.DEBUG)
+    else:
+        log.setLevel(logging.INFO)
+
+    if BRANCH_NAME:
+        branch_name = BRANCH_NAME
+    else:
+        branch_name = args.branch
+
+    if MONERO_NETWORK:
+        monero_network = MONERO_NETWORK
+    else:
+        monero_network = args.network
+    if not monero_network in NETWORK_MODES:
+        log.error(f"This is no known monero network mode {MONERO_NETWORK}")
+        sys.exit(1)
+
+    if DAEMON_HOST:
+        daemon_host = DAEMON_HOST
+    else:
+        daemon_host = args.daemon
+
+    url = URL_DEFAULT.format(branch_name=branch_name)
+    log.info(url)
+
+    DAEMON_ADDRESS = DAEMON_ADDRESS_DEFAULT.format(
+        daemon_host=daemon_host, daemon_port=DAEMON_PORTS[monero_network]
+    )
+    daemon_address = f"http://{daemon_host}:{DAEMON_PORTS[monero_network]}/json_rpc"
+    log.info(daemon_address)
+
+    stuff = get_last_and_next_hardfork(
+        url=url, daemon_address=daemon_address, monero_network=monero_network
+    )
     for k, v in stuff.items():
         print(k, v)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
