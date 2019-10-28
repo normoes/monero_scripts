@@ -149,6 +149,8 @@ def get_last_and_next_hardfork(
                     "params": {"height": block},
                 }
                 headers = {"Content-Type": "application/json"}
+                # Get block header by given activation block height.
+                # This info is used to get the actual hard fork date by block timestamp.
                 result = None
                 try:
                     response = requests.post(
