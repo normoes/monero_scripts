@@ -124,7 +124,7 @@ def get_last_and_next_hardfork(
         interesting_range = False
         lines = code.split("\n")
     except (RequestsConnectionError, ReadTimeout, Timeout) as e:
-        log.error(f"Cannot get information from {host}, because: {str(e)}")
+        log.error(f"Cannot get information from {url}, because: {str(e)}")
 
     for i, line in enumerate(lines):
         line = line.strip()
