@@ -41,11 +41,7 @@ from datetime import datetime, timezone
 import sys
 
 import requests
-from requests.exceptions import (
-    ConnectionError as RequestsConnectionError,
-    ReadTimeout,
-    Timeout,
-)
+from requests.exceptions import RequestException
 
 
 logging.basicConfig()
@@ -101,10 +97,10 @@ def get_last_and_next_hardfork(
     timeout=TIMEOUT,
 ):
     if not monero_network in NETWORK_MODES:
-        log.error(f"This is no known monero network mode {monero_network}")
+        log.error(f"This is no known monero network mode '{monero_network}'.")
         sys.exit(1)
 
-    lines = list()
+    lines = []
     interesting = defaultdict(list)
     try:
         response = requests.get(url, timeout=timeout)
@@ -123,8 +119,8 @@ def get_last_and_next_hardfork(
 
         interesting_range = False
         lines = code.split("\n")
-    except (RequestsConnectionError, ReadTimeout, Timeout) as e:
-        log.error(f"Cannot get information from {url}, because: {str(e)}")
+    except (RequestException) as e:
+        log.error(f"Cannot get information from '{url}', because: '{str(e)}'.")
 
     for i, line in enumerate(lines):
         line = line.strip()
@@ -139,7 +135,9 @@ def get_last_and_next_hardfork(
                 version = fork_info[0].group(1)
                 block = fork_info[0].group(2)
                 difficulty = (
-                    fork_info[0].group(4).translate({ord(" "): None, ord("}"): None})
+                    fork_info[0]
+                    .group(4)
+                    .translate({ord(" "): None, ord("}"): None})
                 )
 
                 data = {
@@ -154,18 +152,21 @@ def get_last_and_next_hardfork(
                 result = None
                 try:
                     response = requests.post(
-                        daemon_address, headers=headers, json=data, timeout=timeout
+                        daemon_address,
+                        headers=headers,
+                        json=data,
+                        timeout=timeout,
                     )
                     log.debug(response.text)
                     if response.status_code != 200:
                         log.warning(
-                            f"received HTTP status code {response.status_code} with {response.text}"
+                            f"Received HTTP status code '{response.status_code}' with '{response.text}'."
                         )
                     response = response.json()
                     result = response.get("result", None)
-                except (RequestsConnectionError, ReadTimeout, Timeout) as e:
+                except (RequestException) as e:
                     log.error(
-                        f"Cannot get info from {daemon_address}, because: {str(e)}"
+                        f"Cannot get info from '{daemon_address}', because: '{str(e)}'."
                     )
                 if result:
                     timestamp = result["block_header"]["timestamp"]
@@ -208,7 +209,9 @@ def main():
         default="node.xmr.to",
         help="Monero dameon to use. If not given as argument, set DAEMON_HOST.",
     )
-    parser.add_argument("--debug", action="store_true", help="Show debug info.")
+    parser.add_argument(
+        "--debug", action="store_true", help="Show debug info."
+    )
 
     args = parser.parse_args()
 
@@ -241,7 +244,9 @@ def main():
     DAEMON_ADDRESS = DAEMON_ADDRESS_DEFAULT.format(
         daemon_host=daemon_host, daemon_port=DAEMON_PORTS[monero_network]
     )
-    daemon_address = f"http://{daemon_host}:{DAEMON_PORTS[monero_network]}/json_rpc"
+    daemon_address = (
+        f"http://{daemon_host}:{DAEMON_PORTS[monero_network]}/json_rpc"
+    )
     log.info(daemon_address)
 
     stuff = get_last_and_next_hardfork(
