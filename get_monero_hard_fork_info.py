@@ -54,7 +54,7 @@ BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", None)
 MONERO_NETWORK = os.environ.get("MONERO_NETWORK", None)
 DAEMON_HOST = os.environ.get("DAEMON_HOST", None)
 
-if MONERO_NETWORK and not MONERO_NETWORK in NETWORK_MODES:
+if MONERO_NETWORK and MONERO_NETWORK not in NETWORK_MODES:
     log.error(f"This is no known monero network mode {MONERO_NETWORK}")
     sys.exit(1)
 
@@ -77,11 +77,12 @@ if DAEMON_HOST and MONERO_NETWORK:
         daemon_host=DAEMON_HOST, daemon_port=DAEMON_PORTS[MONERO_NETWORK]
     )
 
-BEGINNING_MAINNET = "const hardfork_t mainnet_hard_forks\[\]"
-BEGINNING_TESTNET = "const hardfork_t testnet_hard_forks\[\]"
-BEGINNING_STAGENET = "const hardfork_t stagenet_hard_forks\[\]"
+# Make 'flake8' ignore [W605 invalid escape sequence] - escape sequence necessary for regular expression.
+BEGINNING_MAINNET = "const hardfork_t mainnet_hard_forks\[\]"  # noqa: W605
+BEGINNING_TESTNET = "const hardfork_t testnet_hard_forks\[\]"  # noqa: W605
+BEGINNING_STAGENET = "const hardfork_t stagenet_hard_forks\[\]"  # noqa: W605
 END = "};"
-INFO = "{ (\d+), (\d+), (\d+), (\d+.* })"
+INFO = "{ (\d+), (\d+), (\d+), (\d+.* })"  # noqa: W605
 
 NETWORK_RE = {
     NETWORK_MODES[0]: BEGINNING_MAINNET,
@@ -90,13 +91,14 @@ NETWORK_RE = {
 }
 
 
-def get_last_and_next_hardfork(
+# Make 'flake8' ignore [C901 too complex].
+def get_last_and_next_hardfork(  # noqa: C901
     url=URL,
     daemon_address=DAEMON_ADDRESS,
     monero_network=MONERO_NETWORK,
     timeout=TIMEOUT,
 ):
-    if not monero_network in NETWORK_MODES:
+    if monero_network not in NETWORK_MODES:
         log.error(f"This is no known monero network mode '{monero_network}'.")
         sys.exit(1)
 
@@ -122,6 +124,7 @@ def get_last_and_next_hardfork(
     except (RequestException) as e:
         log.error(f"Cannot get information from '{url}', because: '{str(e)}'.")
 
+    api_responsive = True
     for i, line in enumerate(lines):
         line = line.strip()
         if line:
@@ -130,55 +133,59 @@ def get_last_and_next_hardfork(
             if end_line.match(line) and interesting_range:
                 interesting_range = False
                 break
-            if info_line.match(line) and interesting_range:
-                fork_info = list(info_line.finditer(line))
-                version = fork_info[0].group(1)
-                block = fork_info[0].group(2)
-                difficulty = (
-                    fork_info[0]
-                    .group(4)
-                    .translate({ord(" "): None, ord("}"): None})
-                )
+            if interesting_range:
+                info_match = info_line.match(line)
+                if info_match:
+                    fork_info = list(info_line.finditer(line))
+                    version = fork_info[0].group(1)
+                    block = fork_info[0].group(2)
+                    difficulty = (
+                        fork_info[0]
+                        .group(4)
+                        .translate({ord(" "): None, ord("}"): None})
+                    )
 
-                data = {
-                    "jsonrpc": "2.0",
-                    "id": "0",
-                    "method": "get_block_header_by_height",
-                    "params": {"height": block},
-                }
-                headers = {"Content-Type": "application/json"}
-                # Get block header by given activation block height.
-                # This info is used to get the actual hard fork date by block timestamp.
-                result = None
-                try:
-                    response = requests.post(
-                        daemon_address,
-                        headers=headers,
-                        json=data,
-                        timeout=timeout,
-                    )
-                    log.debug(response.text)
-                    if response.status_code != 200:
-                        log.warning(
-                            f"Received HTTP status code '{response.status_code}' with '{response.text}'."
+                    data = {
+                        "jsonrpc": "2.0",
+                        "id": "0",
+                        "method": "get_block_header_by_height",
+                        "params": {"height": block},
+                    }
+                    headers = {"Content-Type": "application/json"}
+                    # Get block header by given activation block height.
+                    # This info is used to get the actual hard fork date by block timestamp.
+                    result = None
+                    try:
+                        if api_responsive:
+                            response = requests.post(
+                                daemon_address,
+                                headers=headers,
+                                json=data,
+                                timeout=timeout,
+                            )
+                            log.debug(response.text)
+                            if response.status_code != 200:
+                                log.warning(
+                                    f"Received HTTP status code '{response.status_code}' with '{response.text}'."
+                                )
+                            response = response.json()
+                            result = response.get("result", None)
+                    except (RequestException) as e:
+                        log.error(
+                            f"Cannot get info from '{daemon_address}', because: '{str(e)}'."
                         )
-                    response = response.json()
-                    result = response.get("result", None)
-                except (RequestException) as e:
-                    log.error(
-                        f"Cannot get info from '{daemon_address}', because: '{str(e)}'."
-                    )
-                if result:
-                    timestamp = result["block_header"]["timestamp"]
-                    date = datetime.fromtimestamp(float(timestamp)).strftime(
-                        "%b %d %Y "
-                    ) + str(timezone.utc)
-                else:
-                    date = "---"
-                # add to list
-                interesting[f"Version {version}"].append(date)
-                interesting[f"Version {version}"].append(block)
-                interesting[f"Version {version}"].append(difficulty)
+                        api_responsive = False
+                    if result:
+                        timestamp = result["block_header"]["timestamp"]
+                        date = datetime.fromtimestamp(
+                            float(timestamp)
+                        ).strftime("%b %d %Y ") + str(timezone.utc)
+                    else:
+                        date = "---"
+                    # add to list
+                    interesting[f"Version {version}"].append(date)
+                    interesting[f"Version {version}"].append(block)
+                    interesting[f"Version {version}"].append(difficulty)
 
     return interesting
 
@@ -229,7 +236,7 @@ def main():
         monero_network = MONERO_NETWORK
     else:
         monero_network = args.network
-    if not monero_network in NETWORK_MODES:
+    if monero_network not in NETWORK_MODES:
         log.error(f"This is no known monero network mode {MONERO_NETWORK}")
         sys.exit(1)
 
@@ -241,11 +248,8 @@ def main():
     url = URL_DEFAULT.format(branch_name=branch_name)
     log.info(url)
 
-    DAEMON_ADDRESS = DAEMON_ADDRESS_DEFAULT.format(
+    daemon_address = DAEMON_ADDRESS_DEFAULT.format(
         daemon_host=daemon_host, daemon_port=DAEMON_PORTS[monero_network]
-    )
-    daemon_address = (
-        f"http://{daemon_host}:{DAEMON_PORTS[monero_network]}/json_rpc"
     )
     log.info(daemon_address)
 
