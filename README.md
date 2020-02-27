@@ -4,6 +4,10 @@ Get [Monero project](https://github.com/monero-project/) meta information.
 
 These tools extract information from parts of the [Monero project](https://github.com/monero-project/) source code files.
 
+Imports:
+* `import get_monero_hard_fork_info`
+* `import get_monero_seed_nodes`
+
 ## get_monero_hard_fork_info.py
 
 Gets past hard fork dates, versions and information.
@@ -12,9 +16,9 @@ Goal:
   * Get monero hard fork dates from `/src/hardforks/hardforks.cpp`.
 
 How to:
-  * for default values and how to use the tool
+  * For default values and how to use the tool
     - `python get_monero_hard_fork_info.py --help`
-  * current master:
+  * Current `master` branch:
     - `python get_monero_hard_fork_info.py`
     - `python get_monero_hard_fork_info.py --branch master`
   * It is also possible to set the branch name as environment variable: `PROJECT_BRANCH_NAME`.
@@ -46,7 +50,6 @@ How to:
   * It is possible to select a different Monero daemon
     - `python get_monero_hard_fork_info.py --daemon localhost`
 
-### Result without working daemon connection
 In case the daemon shuold not be reachable (e.g. timeout, connection error, etc.), the result will be missing the date information:
 ```
 Version 1 ['---', '1', '1341378000']
@@ -71,13 +74,13 @@ Goal:
   * Get monero seed nodes from `/src/p2p/net_node.inl`.
 
 How to:
-  * for default values and how to use the tool
+  * For default values and how to use the tool
     - `python get_monero_seed_nodes.py --help`
-  * current master:
+  * Current `master` branch:
     - `python get_monero_seed_nodes.py`
     - `python get_monero_seed_nodes.py --branch master`
   * It is also possible to set the branch name as environment variable: `PROJECT_BRANCH_NAME`.
-    - `PROJECT_BRANCH_NAME=master python get_monero_seed_nods.py`
+    - `PROJECT_BRANCH_NAME=master python get_monero_seed_nodes.py`
   * `python get_monero_seed_nodes.py --branch release-v0.11.0.0`
     ```
         testnet ['212.83.175.67:28080', '5.9.100.248:28080', '163.172.182.165:28080', '195.154.123.123:28080', '212.83.172.165:28080', '195.154.123.123:28080', '212.83.172.165:28080']
@@ -91,3 +94,4 @@ How to:
     ```
   * It is possible to select the Monero network (`mainnet`, `testnet`, `stagenet`)
     - `python get_monero_seed_nodes.py --network stagenet`
+    - By default seed nodes for all network modes are returned.
