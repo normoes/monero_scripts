@@ -26,7 +26,6 @@ import os
 import logging
 import argparse
 from collections import defaultdict
-from datetime import datetime, timezone
 import sys
 
 import requests
@@ -39,16 +38,12 @@ log.setLevel(logging.INFO)
 
 NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
 ALL_NETWORK_MDOES = "all"
+BRANCH_NAME_DEFAULT = "master"
 
-BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", None)
-MONERO_NETWORK = os.environ.get("MONERO_NETWORK", None)
-DAEMON_HOST = os.environ.get("DAEMON_HOST", None)
+BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", BRANCH_NAME_DEFAULT)
+MONERO_NETWORK = os.environ.get("MONERO_NETWORK", ALL_NETWORK_MDOES)
 
-if MONERO_NETWORK and MONERO_NETWORK not in NETWORK_MODES:
-    log.error(f"This is no known monero network mode: '{MONERO_NETWORK}'.")
-    sys.exit(1)
-
-TIMEOUT = 10
+TIMEOUT = 5
 
 DAEMON_P2P_PORTS = {
     NETWORK_MODES[0]: 18080,
@@ -66,32 +61,27 @@ URL_DEFAULT = "https://raw.githubusercontent.com/monero-project/monero/{branch_n
 URL = None
 if BRANCH_NAME:
     URL = URL_DEFAULT.format(branch_name=BRANCH_NAME)
-DAEMON_ADDRESS_DEFAULT = "http://{daemon_host}:{daemon_port}/json_rpc"
-DAEMON_ADDRESS = None
-if DAEMON_HOST and MONERO_NETWORK:
-    DAEMON_ADDRESS = DAEMON_ADDRESS_DEFAULT.format(
-        daemon_host=DAEMON_HOST, daemon_port=DAEMON_P2P_PORTS[MONERO_NETWORK]
-    )
 
 # Make 'flake8' ignore [W605 invalid escape sequence] - escape sequence necessary for regular expression.
-# noqa: W605
-START = "::get_seed_nodes\("
-SEED_NODES_COMPLETE = 'full_addrs\.insert\("(.*):([0-9]{2,5})"\);'
+
+START = "::get_seed_nodes\("  # noqa: W605
+SEED_NODES_COMPLETE = (
+    'full_addrs\.insert\("(.*):([0-9]{2,5})"\);'  # noqa: W605
+)
 END = "return full_addrs;"
 
 
-def get_seed_nodes(
-    url=URL,
-    # daemon_address=DAEMON_ADDRESS,
-    monero_network=MONERO_NETWORK,
-    timeout=TIMEOUT,
+# Make 'flake8' ignore [C901 too complex].
+def get_seed_nodes(  # noqa: C901
+    url=URL, monero_network=MONERO_NETWORK, timeout=TIMEOUT,
 ):
     if (
         monero_network not in NETWORK_MODES
         and not monero_network == ALL_NETWORK_MDOES
     ):
-        log.error(f"This is no known monero network mode '{monero_network}'.")
+        log.error(f"This is no known monero network mode: '{monero_network}'.")
         sys.exit(1)
+    log.info(f"Getting seed nodes for '{monero_network}' from '{url}'.")
 
     lines = []
     interesting = defaultdict(list)
@@ -139,7 +129,9 @@ def get_seed_nodes(
     if monero_network == ALL_NETWORK_MDOES:
         return interesting
     else:
-        return {monero_network: interesting[monero_network]}
+        result = {monero_network: interesting[monero_network]}
+        log.info(result)
+        return result
 
 
 def main():
@@ -151,15 +143,15 @@ def main():
         "-b",
         "--branch",
         nargs="?",
-        default="master",
-        help="Branch to check /src/p2p/net_node.inl. If not given as argument, set PROJECT_BRANCH_NAME.",
+        default=BRANCH_NAME,
+        help="Branch to check /src/p2p/net_node.inl.",
     )
     parser.add_argument(
         "-n",
         "--network",
         nargs="?",
-        default=ALL_NETWORK_MDOES,
-        help="Monero network to check (mainnet, stagenet, testnet). If not given as argument, set MONERO_NETWORK.",
+        default=MONERO_NETWORK,
+        help="Monero network to check (mainnet, stagenet, testnet, all).",
     )
     parser.add_argument(
         "--debug", action="store_true", help="Show debug info."
@@ -172,21 +164,14 @@ def main():
     else:
         log.setLevel(logging.INFO)
 
-    if BRANCH_NAME:
-        branch_name = BRANCH_NAME
-    else:
-        branch_name = args.branch
-
-    if MONERO_NETWORK:
-        monero_network = MONERO_NETWORK
-    else:
-        monero_network = args.network
+    branch_name = args.branch
+    monero_network = args.network
 
     url = URL_DEFAULT.format(branch_name=branch_name)
-    log.info(url)
+    log.debug(url)
 
-    stuff = get_seed_nodes(url=url, monero_network=monero_network)
-    for k, v in stuff.items():
+    seed_nodes = get_seed_nodes(url=url, monero_network=monero_network)
+    for k, v in seed_nodes.items():
         print(k, v)
 
 

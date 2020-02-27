@@ -49,16 +49,14 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
+BRANCH_NAME_DEFAULT = "master"
+DAEMON_HOST_DEFAULT = "node.xmr.to"
 
-BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", None)
-MONERO_NETWORK = os.environ.get("MONERO_NETWORK", None)
-DAEMON_HOST = os.environ.get("DAEMON_HOST", None)
+BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", BRANCH_NAME_DEFAULT)
+MONERO_NETWORK = os.environ.get("MONERO_NETWORK", NETWORK_MODES[0])
+DAEMON_HOST = os.environ.get("DAEMON_HOST", DAEMON_HOST_DEFAULT)
 
-if MONERO_NETWORK and MONERO_NETWORK not in NETWORK_MODES:
-    log.error(f"This is no known monero network mode {MONERO_NETWORK}")
-    sys.exit(1)
-
-TIMEOUT = 10
+TIMEOUT = 5
 
 DAEMON_PORTS = {
     NETWORK_MODES[0]: 18081,
@@ -101,6 +99,9 @@ def get_last_and_next_hardfork(  # noqa: C901
     if monero_network not in NETWORK_MODES:
         log.error(f"This is no known monero network mode '{monero_network}'.")
         sys.exit(1)
+    log.info(
+        f"Getting hard fork versions for '{monero_network}' from '{url}'."
+    )
 
     lines = []
     interesting = defaultdict(list)
@@ -199,22 +200,22 @@ def main():
         "-b",
         "--branch",
         nargs="?",
-        default="master",
-        help="Branch to check /src/hardforks/hardforks.cpp. If not given as argument, set PROJECT_BRANCH_NAME.",
+        default=BRANCH_NAME,
+        help="Branch to check /src/hardforks/hardforks.cpp.",
     )
     parser.add_argument(
         "-n",
         "--network",
         nargs="?",
-        default=NETWORK_MODES[0],
-        help="Monero network to check (mainnet, stagenet, testnet). If not given as argument, set MONERO_NETWORK.",
+        default=MONERO_NETWORK,
+        help="Monero network to check (mainnet, stagenet, testnet).",
     )
     parser.add_argument(
         "-d",
         "--daemon",
         nargs="?",
-        default="node.xmr.to",
-        help="Monero dameon to use. If not given as argument, set DAEMON_HOST.",
+        default=DAEMON_HOST,
+        help="Monero dameon to use.",
     )
     parser.add_argument(
         "--debug", action="store_true", help="Show debug info."
@@ -227,36 +228,22 @@ def main():
     else:
         log.setLevel(logging.INFO)
 
-    if BRANCH_NAME:
-        branch_name = BRANCH_NAME
-    else:
-        branch_name = args.branch
-
-    if MONERO_NETWORK:
-        monero_network = MONERO_NETWORK
-    else:
-        monero_network = args.network
-    if monero_network not in NETWORK_MODES:
-        log.error(f"This is no known monero network mode {MONERO_NETWORK}")
-        sys.exit(1)
-
-    if DAEMON_HOST:
-        daemon_host = DAEMON_HOST
-    else:
-        daemon_host = args.daemon
+    branch_name = args.branch
+    monero_network = args.network
+    daemon_host = args.daemon
 
     url = URL_DEFAULT.format(branch_name=branch_name)
-    log.info(url)
+    log.debug(url)
 
     daemon_address = DAEMON_ADDRESS_DEFAULT.format(
         daemon_host=daemon_host, daemon_port=DAEMON_PORTS[monero_network]
     )
-    log.info(daemon_address)
+    log.debug(daemon_address)
 
-    stuff = get_last_and_next_hardfork(
+    hard_fork_versions = get_last_and_next_hardfork(
         url=url, daemon_address=daemon_address, monero_network=monero_network
     )
-    for k, v in stuff.items():
+    for k, v in hard_fork_versions.items():
         print(k, v)
 
 
