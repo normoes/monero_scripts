@@ -16,7 +16,11 @@ setup(
     url="https://github.com/normoes/monero_scripts",
     download_url=f"https://github.com/normoes/monero_scripts/archive/{__version__}.tar.gz",
     # packages=find_packages(exclude=["tests*"]),
-    py_modules=["get_monero_hard_fork_info", "get_monero_seed_nodes"],
+    py_modules=[
+        "get_monero_hard_fork_info",
+        "get_monero_seed_nodes",
+        "connect_to_node",
+    ],
     install_requires=["requests>=2.23.0"],
     # extras_require={"test": ["mock", "pytest"]},
     classifiers=[

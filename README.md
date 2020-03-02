@@ -95,3 +95,16 @@ How to:
   * It is possible to select the Monero network (`mainnet`, `testnet`, `stagenet`)
     - `python get_monero_seed_nodes.py --network stagenet`
     - By default seed nodes for all network modes are returned.
+
+## connect_to_node.py
+
+This is a very simple script to just ping the seed nodes (IPs in general) in order to get at least some information about their public accessibility.
+
+
+After importing the module:
+```
+from connect_to_node import try_to_connect
+```
+, it can be used like this:
+* `try_to_connect((node_ip, node_port))`
+* `try_to_connect("node_ip:node_port")`

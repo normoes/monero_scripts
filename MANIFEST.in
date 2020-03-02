@@ -1,3 +1,4 @@
 include _version.py
 include get_monero_hard_fork_info.py
 include get_monero_seed_nodes.py
+include connect_to_node.py
