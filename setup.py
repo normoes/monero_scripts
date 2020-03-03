@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 from _version import __version__
 
 setup(
@@ -15,12 +15,12 @@ setup(
     maintainer_email="<norman.moeschter@gmail.com>",
     url="https://github.com/normoes/monero_scripts",
     download_url=f"https://github.com/normoes/monero_scripts/archive/{__version__}.tar.gz",
-    # packages=find_packages(exclude=["tests*"]),
-    py_modules=[
-        "get_monero_hard_fork_info",
-        "get_monero_seed_nodes",
-        "connect_to_node",
-    ],
+    packages=find_packages(exclude=["tests*"]),
+    # py_modules=[
+    #     "get_monero_hard_fork_info",
+    #     "get_monero_seed_nodes",
+    #     "connect_to_node",
+    # ],
     install_requires=["requests>=2.23.0"],
     # extras_require={"test": ["mock", "pytest"]},
     classifiers=[

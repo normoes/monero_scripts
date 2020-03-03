@@ -5,8 +5,10 @@ Get [Monero project](https://github.com/monero-project/) meta information.
 These tools extract information from parts of the [Monero project](https://github.com/monero-project/) source code files.
 
 Imports:
-* `import get_monero_hard_fork_info`
-* `import get_monero_seed_nodes`
+* `from monero_scripts import get_monero_hard_fork_info`
+* `from monero_scripts import get_monero_seed_nodes`
+* `from monero_scripts import connect_to_node`
+* `from monero_scripts.connect_to_node import try_to_connect_keep_errors`
 
 ## get_monero_hard_fork_info.py
 
@@ -103,7 +105,7 @@ This is a very simple script to just ping the seed nodes (IPs in general) in ord
 
 After importing the module:
 ```
-from connect_to_node import try_to_connect
+from monero_scripts.connect_to_node import try_to_connect
 ```
 , it can be used like this:
 * `try_to_connect((node_ip, node_port))`
