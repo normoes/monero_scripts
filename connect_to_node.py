@@ -1,7 +1,13 @@
 import socket
+import logging
 
 
-def try_to_connect(node) -> bool:
+logging.basicConfig()
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
+
+
+def make_connection(node):
     """
     'socket.connect()' requires a tuple(str, int).
     Can be given to this function as string as well "url:port" and will be turned into the proper tuple().
@@ -10,17 +16,45 @@ def try_to_connect(node) -> bool:
     node_ = None
 
     if isinstance(node, str):
-        node_parts = node.split(":")
-        node_ = (node_parts[0], int(node_parts[1]))
+        ip, port = node.split(":")
+        node_ = (ip, int(port))
     elif isinstance(node, tuple):
         node_ = node
 
+    # TCP: SOCK_STREAM
+    # UDP: SOCK_DGRAM
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(5)
     try:
         sock.connect(node_)
-        return True
-    except Exception:
+        log.info("Successfully connected to '{ip}:{port}'.")
+    finally:
+        sock.close()
+
+    return True
+
+
+def try_to_connect_keep_errors(node) -> bool:
+    """Connects to node.
+
+    Errors are reported back to the caller.
+    Exceptions are not handled..
+    """
+
+    return make_connection(node)
+
+
+def try_to_connect(node) -> bool:
+    """Connects to node.
+
+    In case of an error, 'False is returned.'
+    Exceptions are handled.
+    """
+
+    try:
+        return make_connection(node)
+    except Exception as e:
+        log.error(str(e))
         return False
 
 
