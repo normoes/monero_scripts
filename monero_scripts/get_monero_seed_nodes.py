@@ -135,10 +135,18 @@ def get_seed_nodes(  # noqa: C901
 
 
 def main():
+    from ._version import __version__
+
     parser = argparse.ArgumentParser(
         description="Get monero seed nodes from /src/p2p/net_node.inl.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s {version}".format(version=__version__),
+    )
+
     parser.add_argument(
         "-b",
         "--branch",

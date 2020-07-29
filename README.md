@@ -19,13 +19,13 @@ Goal:
 
 How to:
   * For default values and how to use the tool
-    - `python get_monero_hard_fork_info.py --help`
+    - `python -m monero_scripts.get_monero_hard_fork_info --help`
   * Current `master` branch:
-    - `python get_monero_hard_fork_info.py`
-    - `python get_monero_hard_fork_info.py --branch master`
+    - `python -m monero_scripts.get_monero_hard_fork_info`
+    - `python -m monero_scripts.get_monero_hard_fork_info --branch master`
   * It is also possible to set the branch name as environment variable: `PROJECT_BRANCH_NAME`.
     - `PROJECT_BRANCH_NAME=master python get_monero_hard_fork_info.py`
-  * `python get_monero_hard_fork_info.py --branch release-v0.11.0.0`
+  * `python -m monero_scripts.get_monero_hard_fork_info --branch release-v0.11.0.0`
     ```
         version 1 ['Apr 18 2014 UTC', '1', '1341378000']
         version 2 ['Mar 20 2016 UTC', '1009827', '1442763710']
@@ -34,12 +34,12 @@ How to:
         version 5 ['Apr 15 2017 UTC', '1288616', '1489520158']
         version 6 ['Sep 16 2017 UTC', '1400000', '1503046577']
     ```
-  * `python get_monero_hard_fork_info.py --branch release-v0.12`
+  * `python -m monero_scripts.get_monero_hard_fork_info --branch release-v0.12`
     ```
         ...
         version 7 ['Apr 06 2018 UTC', '1546000', '1521303150']
     ```
-  * `python get_monero_hard_fork_info.py --branch release-v0.13`
+  * `python -m monero_scripts.get_monero_hard_fork_info --branch release-v0.13`
     ```
         ...
         version 8 ['Oct 18 2018 UTC', '1685555', '1535889547']
@@ -48,9 +48,23 @@ How to:
         version 11 ['Mar 10 2019 UTC', '1788720', '1550225678']
     ```
   * It is possible to select the Monero network (`mainnet`, `testnet`, `stagenet`)
-    - `python get_monero_hard_fork_info.py --network stagenet`
+    - `python -m monero_scripts.get_monero_hard_fork_info --network stagenet`
   * It is possible to select a different Monero daemon
-    - `python get_monero_hard_fork_info.py --daemon localhost`
+    - `python -m monero_scripts.get_monero_hard_fork_info --daemon localhost`
+  * It is possible to select a different Monero daemon port
+    - `python -m monero_scripts.get_monero_hard_fork_info --port 18082`
+  * Thee following two commands do the exact same thing:
+    - `python -m monero_scripts.get_monero_hard_fork_info --port 18082 --daemon mainnet.community.xmr.to`
+    - `MONEROD_URL=mainnet.community.xmr.to MONEROD_RPC_PORT=18082 python -m monero_scripts.get_monero_hard_fork_info`
+
+The following environment variables can be used for the configuration:
+
+| env var               | description                                                                 | cli option  |
+|-----------------------|-----------------------------------------------------------------------------|-------------|
+| `PROJECT_BRANCH_NAME` | Branch (monero-project on github) to extract hard fork info from.           | `--branch`  |
+| `MONERO_NETWORK`      | Monero network (`mainnet`, `stagnet`, `testnet`) to get hard fork info for. | `--network` |
+| `MONEROD_URL`         | Monero daemon url.                                                          | `--daemon`  |
+| `MONEROD_RPC_PORT`    | Monero daemon port.                                                         | `--port`    |
 
 In case the daemon shuold not be reachable (e.g. timeout, connection error, etc.), the result will be missing the date information:
 ```
@@ -97,6 +111,13 @@ How to:
   * It is possible to select the Monero network (`mainnet`, `testnet`, `stagenet`)
     - `python get_monero_seed_nodes.py --network stagenet`
     - By default seed nodes for all network modes are returned.
+
+The following environment variables can be used for the configuration:
+
+| env var               | description                                                                  | cli option  |
+|-----------------------|------------------------------------------------------------------------------|-------------|
+| `PROJECT_BRANCH_NAME` | Branch (monero-project on github) to extract seed nodes from.                | `--branch`  |
+| `MONERO_NETWORK`      | Monero network (`mainnet`, `stagnet`, `testnet`) to get seed nodes info for. | `--network` |
 
 ## connect_to_node.py
 

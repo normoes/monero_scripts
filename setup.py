@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from setuptools import setup, find_packages
-from _version import __version__
+from monero_scripts._version import __version__
 
 setup(
     name="monero_scripts",

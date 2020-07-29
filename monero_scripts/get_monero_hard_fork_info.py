@@ -51,10 +51,13 @@ log.setLevel(logging.INFO)
 NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
 BRANCH_NAME_DEFAULT = "master"
 DAEMON_HOST_DEFAULT = "node.xmr.to"
+RPC_PORT_DEFAULT = 18081
 
 BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", BRANCH_NAME_DEFAULT)
 MONERO_NETWORK = os.environ.get("MONERO_NETWORK", NETWORK_MODES[0])
-DAEMON_HOST = os.environ.get("DAEMON_HOST", DAEMON_HOST_DEFAULT)
+
+DAEMON_HOST = os.environ.get("MONEROD_URL", DAEMON_HOST_DEFAULT)
+RPC_PORT_ENV = os.environ.get("MONEROD_RPC_PORT", None)
 
 TIMEOUT = 5
 
@@ -63,6 +66,13 @@ DAEMON_PORTS = {
     NETWORK_MODES[1]: 38081,
     NETWORK_MODES[2]: 28081,
 }
+RPC_PORT = (
+    RPC_PORT_ENV
+    if RPC_PORT_ENV
+    else DAEMON_PORTS[MONERO_NETWORK]
+    if MONERO_NETWORK and MONERO_NETWORK in NETWORK_MODES
+    else RPC_PORT_DEFAULT
+)
 
 URL_DEFAULT = "https://raw.githubusercontent.com/monero-project/monero/{branch_name}/src/hardforks/hardforks.cpp"
 URL = None
@@ -70,9 +80,9 @@ if BRANCH_NAME:
     URL = URL_DEFAULT.format(branch_name=BRANCH_NAME)
 DAEMON_ADDRESS_DEFAULT = "http://{daemon_host}:{daemon_port}/json_rpc"
 DAEMON_ADDRESS = None
-if DAEMON_HOST and MONERO_NETWORK:
+if DAEMON_HOST and RPC_PORT:
     DAEMON_ADDRESS = DAEMON_ADDRESS_DEFAULT.format(
-        daemon_host=DAEMON_HOST, daemon_port=DAEMON_PORTS[MONERO_NETWORK]
+        daemon_host=DAEMON_HOST, daemon_port=RPC_PORT
     )
 
 # Make 'flake8' ignore [W605 invalid escape sequence] - escape sequence necessary for regular expression.
@@ -102,6 +112,7 @@ def get_last_and_next_hardfork(  # noqa: C901
     log.info(
         f"Getting hard fork versions for '{monero_network}' from '{url}'."
     )
+    log.info(f"Getting daemon info from '{daemon_address}'.")
 
     lines = []
     interesting = defaultdict(list)
@@ -192,10 +203,18 @@ def get_last_and_next_hardfork(  # noqa: C901
 
 
 def main():
+    from ._version import __version__
+
     parser = argparse.ArgumentParser(
         description="Get monero hard fork dates from /src/hardforks/hardforks.cpp.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="%(prog)s {version}".format(version=__version__),
+    )
+
     parser.add_argument(
         "-b",
         "--branch",
@@ -215,7 +234,14 @@ def main():
         "--daemon",
         nargs="?",
         default=DAEMON_HOST,
-        help="Monero dameon to use.",
+        help="Monero dameon URL to use.",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        nargs="?",
+        default=RPC_PORT,
+        help="Monero dameon PORT to use.",
     )
     parser.add_argument(
         "--debug", action="store_true", help="Show debug info."
@@ -231,12 +257,13 @@ def main():
     branch_name = args.branch
     monero_network = args.network
     daemon_host = args.daemon
+    daemon_port = args.port
 
     url = URL_DEFAULT.format(branch_name=branch_name)
     log.debug(url)
 
     daemon_address = DAEMON_ADDRESS_DEFAULT.format(
-        daemon_host=daemon_host, daemon_port=DAEMON_PORTS[monero_network]
+        daemon_host=daemon_host, daemon_port=daemon_port
     )
     log.debug(daemon_address)
 
