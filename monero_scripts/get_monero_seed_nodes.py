@@ -39,6 +39,7 @@ log.setLevel(logging.INFO)
 NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
 ALL_NETWORK_MDOES = "all"
 BRANCH_NAME_DEFAULT = "master"
+URL_DEFAULT = "https://raw.githubusercontent.com/monero-project/monero/{branch_name}/src/p2p/net_node.inl"
 
 BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", BRANCH_NAME_DEFAULT)
 MONERO_NETWORK = os.environ.get("MONERO_NETWORK", ALL_NETWORK_MDOES)
@@ -57,13 +58,7 @@ DAEMON_PORT_NETWORK_MAP = {
     28080: NETWORK_MODES[2],
 }
 
-URL_DEFAULT = "https://raw.githubusercontent.com/monero-project/monero/{branch_name}/src/p2p/net_node.inl"
-URL = None
-if BRANCH_NAME:
-    URL = URL_DEFAULT.format(branch_name=BRANCH_NAME)
-
 # Make 'flake8' ignore [W605 invalid escape sequence] - escape sequence necessary for regular expression.
-
 START = "::get_seed_nodes\("  # noqa: W605
 SEED_NODES_COMPLETE = (
     'full_addrs\.insert\("(.*):([0-9]{2,5})"\);'  # noqa: W605
@@ -73,8 +68,14 @@ END = "return full_addrs;"
 
 # Make 'flake8' ignore [C901 too complex].
 def get_seed_nodes(  # noqa: C901
-    url=URL, monero_network=MONERO_NETWORK, timeout=TIMEOUT,
+    url=URL_DEFAULT,
+    branch=BRANCH_NAME,
+    monero_network=MONERO_NETWORK,
+    timeout=TIMEOUT,
 ):
+    url = url.format(branch_name=branch)
+    log.debug(url)
+
     if (
         monero_network not in NETWORK_MODES
         and not monero_network == ALL_NETWORK_MDOES
@@ -175,10 +176,11 @@ def main():
     branch_name = args.branch
     monero_network = args.network
 
-    url = URL_DEFAULT.format(branch_name=branch_name)
-    log.debug(url)
+    url = URL_DEFAULT
 
-    seed_nodes = get_seed_nodes(url=url, monero_network=monero_network)
+    seed_nodes = get_seed_nodes(
+        url=url, branch=branch_name, monero_network=monero_network
+    )
     for k, v in seed_nodes.items():
         print(k, v)
 

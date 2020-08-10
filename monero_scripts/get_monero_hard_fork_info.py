@@ -52,6 +52,7 @@ NETWORK_MODES = ["mainnet", "stagenet", "testnet"]
 BRANCH_NAME_DEFAULT = "master"
 DAEMON_HOST_DEFAULT = "node.xmr.to"
 RPC_PORT_DEFAULT = 18081
+URL_DEFAULT = "https://raw.githubusercontent.com/monero-project/monero/{branch_name}/src/hardforks/hardforks.cpp"
 
 BRANCH_NAME = os.environ.get("PROJECT_BRANCH_NAME", BRANCH_NAME_DEFAULT)
 MONERO_NETWORK = os.environ.get("MONERO_NETWORK", NETWORK_MODES[0])
@@ -74,10 +75,6 @@ RPC_PORT = (
     else RPC_PORT_DEFAULT
 )
 
-URL_DEFAULT = "https://raw.githubusercontent.com/monero-project/monero/{branch_name}/src/hardforks/hardforks.cpp"
-URL = None
-if BRANCH_NAME:
-    URL = URL_DEFAULT.format(branch_name=BRANCH_NAME)
 DAEMON_ADDRESS_DEFAULT = "http://{daemon_host}:{daemon_port}/json_rpc"
 DAEMON_ADDRESS = None
 if DAEMON_HOST and RPC_PORT:
@@ -101,11 +98,15 @@ NETWORK_RE = {
 
 # Make 'flake8' ignore [C901 too complex].
 def get_last_and_next_hardfork(  # noqa: C901
-    url=URL,
+    url=URL_DEFAULT,
+    branch=BRANCH_NAME,
     daemon_address=DAEMON_ADDRESS,
     monero_network=MONERO_NETWORK,
     timeout=TIMEOUT,
 ):
+    url = url.format(branch_name=branch)
+    log.debug(url)
+
     if monero_network not in NETWORK_MODES:
         log.error(f"This is no known monero network mode '{monero_network}'.")
         sys.exit(1)
@@ -259,8 +260,7 @@ def main():
     daemon_host = args.daemon
     daemon_port = args.port
 
-    url = URL_DEFAULT.format(branch_name=branch_name)
-    log.debug(url)
+    url = URL_DEFAULT
 
     daemon_address = DAEMON_ADDRESS_DEFAULT.format(
         daemon_host=daemon_host, daemon_port=daemon_port
@@ -268,7 +268,10 @@ def main():
     log.debug(daemon_address)
 
     hard_fork_versions = get_last_and_next_hardfork(
-        url=url, daemon_address=daemon_address, monero_network=monero_network
+        url=url,
+        branch=branch_name,
+        daemon_address=daemon_address,
+        monero_network=monero_network,
     )
     for k, v in hard_fork_versions.items():
         print(k, v)
