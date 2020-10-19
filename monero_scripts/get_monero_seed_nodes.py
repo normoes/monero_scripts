@@ -27,6 +27,7 @@ import logging
 import argparse
 from collections import defaultdict
 import sys
+import json
 
 import requests
 from requests.exceptions import RequestException
@@ -163,6 +164,9 @@ def main():
         help="Monero network to check (mainnet, stagenet, testnet, all).",
     )
     parser.add_argument(
+        "--json", action="store_true", help="Result in JSON format."
+    )
+    parser.add_argument(
         "--debug", action="store_true", help="Show debug info."
     )
 
@@ -181,8 +185,11 @@ def main():
     seed_nodes = get_seed_nodes(
         url=url, branch=branch_name, monero_network=monero_network
     )
-    for k, v in seed_nodes.items():
-        print(k, v)
+    if args.json:
+        print(json.dumps(seed_nodes))
+    else:
+        for k, v in seed_nodes.items():
+            print(k, v)
 
 
 if __name__ == "__main__":

@@ -39,9 +39,11 @@ import argparse
 from collections import defaultdict
 from datetime import datetime, timezone
 import sys
+import json
 
 import requests
 from requests.exceptions import RequestException
+from monerorpc.authproxy import AuthServiceProxy, JSONRPCException
 
 
 logging.basicConfig()
@@ -138,6 +140,9 @@ def get_last_and_next_hardfork(  # noqa: C901
         log.error(f"Cannot get information from '{url}', because: '{str(e)}'.")
 
     api_responsive = True
+    rpc_connection = AuthServiceProxy(
+        service_url=daemon_address, timeout=timeout
+    )
     for i, line in enumerate(lines):
         line = line.strip()
         if line:
@@ -158,32 +163,15 @@ def get_last_and_next_hardfork(  # noqa: C901
                         .translate({ord(" "): None, ord("}"): None})
                     )
 
-                    data = {
-                        "jsonrpc": "2.0",
-                        "id": "0",
-                        "method": "get_block_header_by_height",
-                        "params": {"height": block},
-                    }
-                    headers = {"Content-Type": "application/json"}
                     # Get block header by given activation block height.
                     # This info is used to get the actual hard fork date by block timestamp.
                     result = None
                     try:
                         if api_responsive:
-                            response = requests.post(
-                                daemon_address,
-                                headers=headers,
-                                json=data,
-                                timeout=timeout,
+                            result = rpc_connection.get_block_header_by_height(
+                                {"height": block}
                             )
-                            log.debug(response.text)
-                            if response.status_code != 200:
-                                log.warning(
-                                    f"Received HTTP status code '{response.status_code}' with '{response.text}'."
-                                )
-                            response = response.json()
-                            result = response.get("result", None)
-                    except (RequestException) as e:
+                    except (JSONRPCException) as e:
                         log.error(
                             f"Cannot get info from '{daemon_address}', because: '{str(e)}'."
                         )
@@ -245,6 +233,9 @@ def main():
         help="Monero dameon PORT to use.",
     )
     parser.add_argument(
+        "--json", action="store_true", help="Result in JSON format."
+    )
+    parser.add_argument(
         "--debug", action="store_true", help="Show debug info."
     )
 
@@ -273,8 +264,11 @@ def main():
         daemon_address=daemon_address,
         monero_network=monero_network,
     )
-    for k, v in hard_fork_versions.items():
-        print(k, v)
+    if args.json:
+        print(json.dumps(hard_fork_versions))
+    else:
+        for k, v in hard_fork_versions.items():
+            print(k, v)
 
 
 if __name__ == "__main__":

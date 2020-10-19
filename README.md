@@ -1,3 +1,6 @@
+[![GitHub Release](https://img.shields.io/github/v/release/normoes/monero_scripts.svg)](https://github.com/normoes/monero_scripts/releases)
+[![GitHub Tags](https://img.shields.io/github/v/tag/normoes/monero_scripts.svg)](https://github.com/normoes/monero_scripts/tags)
+
 # Monero scripts
 
 Get [Monero project](https://github.com/monero-project/) meta information.
