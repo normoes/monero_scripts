@@ -13,8 +13,8 @@ setup(
     author_email="<norman.moeschter@gmail.com>",
     maintainer="Norman Moeschter-Schenck",
     maintainer_email="<norman.moeschter@gmail.com>",
-    url="https://github.com/normoes/monero_scripts",
-    download_url=f"https://github.com/normoes/monero_scripts/archive/{__version__}.tar.gz",
+    url="https://github.com/monero-ecosystem/monero_scripts",
+    download_url=f"https://github.com/monero-ecosystem/monero_scripts/archive/{__version__}.tar.gz",
     packages=find_packages(exclude=["tests*"]),
     # py_modules=[
     #     "get_monero_hard_fork_info",
